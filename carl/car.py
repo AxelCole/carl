@@ -6,13 +6,14 @@ from copy import deepcopy
 
 from carl.utils import make_color
 
+
 class Cars(object):
 
     ANGLE_UNIT = np.pi / 16
     SPEED_UNIT = 0.02
 
     def __init__(self, circuit, n_cars=1, num_sensors=5, names=None, colors=None,
-        render_sensors=True, fov=np.pi):
+                 render_sensors=True, fov=np.pi):
         self.n_cars = n_cars
         self.num_sensors = num_sensors
 
@@ -62,9 +63,10 @@ class Cars(object):
         self.speeds = np.array([0. for _ in range(self.n_cars)])
         self.in_circuit = np.ones(self.n_cars, dtype=np.bool)
         self.render_locked = np.zeros(self.n_cars, np.bool)
-        self.sensor_lines_data = np.zeros((self.n_cars, self.num_sensors, 2, 2))
+        self.sensor_lines_data = np.zeros(
+            (self.n_cars, self.num_sensors, 2, 2))
         self.time = 0
-    
+
     def reset_render(self, ax=None):
         if hasattr(self, 'patch'):
             for patch in getattr(self, 'patch'):
@@ -83,7 +85,7 @@ class Cars(object):
         """Change the speed of the car and / or its direction.
         Both can be negative."""
         speeds = np.clip(actions[:, 0], -1, 1)
-        thetas = 2 * np.clip(actions[:, 1], -1 , 1)
+        thetas = 2 * np.clip(actions[:, 1], -1, 1)
 
         self.speeds = np.maximum(0.0, self.speeds + speeds * self.SPEED_UNIT)
         self.thetas += self.in_circuit * thetas * self.ANGLE_UNIT
@@ -112,7 +114,8 @@ class Cars(object):
         return np.stack((a * cos - b * sin + self.xs, a * sin + b * cos + self.ys), axis=-1)
 
     def compute_box(self):
-        points = np.stack([self.coords(i, j) for i, j in self.anchors], axis=-2)
+        points = np.stack([self.coords(i, j)
+                           for i, j in self.anchors], axis=-2)
         self.cars = [geom.Polygon(points[k]) for k in range(self.n_cars)]
 
     def intersection(self, i, phi, circuit):
@@ -139,7 +142,8 @@ class Cars(object):
             except Exception as e:
                 intersections.append(line.boundary[1].xy)
         intersections = np.array(intersections)[..., 0]
-        self.sensor_lines_data[:, i] = np.stack((origins, intersections), axis=-1)
+        self.sensor_lines_data[:, i] = np.stack(
+            (origins, intersections), axis=-1)
         return intersections
 
     def get_distances(self, circuit):
@@ -147,7 +151,8 @@ class Cars(object):
         origin = np.array([1, 0])
         for i, phi in enumerate(self.angles):
             intersections = self.intersection(i, phi, circuit)
-            distance = np.sqrt(np.sum(np.square(intersections - origin), axis=-1))
+            distance = np.sqrt(
+                np.sum(np.square(intersections - origin), axis=-1))
             distances.append(distance)
         return np.stack(distances, axis=-1)
 
@@ -155,7 +160,8 @@ class Cars(object):
         # Plot the car
         for car_id, car in enumerate(self.cars):
             if not self.render_locked[car_id]:
-                other = PolygonPatch(car, fc=self.colors[car_id], ec='black', alpha=1.0, zorder=4)
+                other = PolygonPatch(
+                    car, fc=self.colors[car_id], ec='black', alpha=1.0, zorder=4)
                 if self.patch[car_id] is None:
                     self.patch[car_id] = other
                 else:
@@ -190,7 +196,7 @@ class Cars(object):
 
         self.render_locked = np.logical_not(self.in_circuit)
         self.time += 1
-    
+
     def _plot_sensors(self, ax):
         for car_id in range(self.n_cars):
             if not self.render_locked[car_id]:

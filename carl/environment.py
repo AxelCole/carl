@@ -10,10 +10,11 @@ from carl.car import Cars
 from carl.ui import Interface
 from carl.circuit import Circuit
 
+
 class Environment(gym.Env):
 
     def __init__(self, circuits, n_cars=1, action_type='discrete', add_random_circuits=False,
-        render_sensors=None, n_sensors=5, fov=np.pi, names=None, road_width=0.3, max_steps=1000):
+                 render_sensors=None, n_sensors=5, fov=np.pi, names=None, road_width=0.3, max_steps=1000):
         self.render_sensors = render_sensors if render_sensors else n_cars < 6
         self.NUM_SENSORS = n_sensors
         self.FOV = fov
@@ -31,7 +32,8 @@ class Environment(gym.Env):
                 self.circuits[i] = circuit
             else:
                 self.n_cars = n_cars
-                self.circuits[i] = Circuit(circuit, n_cars=self.n_cars, width=self.road_width)
+                self.circuits[i] = Circuit(
+                    circuit, n_cars=self.n_cars, width=self.road_width)
         self.random_circuits = []
 
         self._current_circuit_id = -1
@@ -49,7 +51,7 @@ class Environment(gym.Env):
 
         # Build individual action space
         self.action_type = action_type
-        
+
         if action_type == 'discrete':
             self.actions = []
             for turn_step in [-1, -.5, 0, .5, 1]:
@@ -57,10 +59,12 @@ class Environment(gym.Env):
                     self.actions.append((speed_step, turn_step))
             self.action_space = gym.spaces.Discrete(len(self.actions))
         else:
-            self.action_space = gym.spaces.Box(low=np.array([-1, -1]), high=np.array([1, 1]))
+            self.action_space = gym.spaces.Box(
+                low=np.array([-1, -1]), high=np.array([1, 1]))
 
         # Build individual observation space
-        self.observation_space = gym.spaces.Box(low=0, high=np.inf, shape=(self.NUM_SENSORS+1,))
+        self.observation_space = gym.spaces.Box(
+            low=0, high=np.inf, shape=(self.NUM_SENSORS+1,))
 
         self.time = 0
         self.progression = np.array([0 for _ in range(self.n_cars)])
@@ -77,8 +81,10 @@ class Environment(gym.Env):
 
     @property
     def current_state(self):
-        normalized_speeds = np.expand_dims(self.cars.speeds, -1) / (10 * self.cars.SPEED_UNIT)
-        distances = self.cars.get_distances(self.current_circuit) / (10 * self.cars.h)
+        normalized_speeds = np.expand_dims(
+            self.cars.speeds, -1) / (10 * self.cars.SPEED_UNIT)
+        distances = self.cars.get_distances(
+            self.current_circuit) / (10 * self.cars.h)
         return np.concatenate((distances, normalized_speeds), axis=-1).astype(np.float32)
 
     def step(self, actions):
@@ -117,13 +123,15 @@ class Environment(gym.Env):
         reward = 0.0
         crashed = self.cars.crashed[0]
         if crashed:
-            reward -= 0.5
+            reward -= 5
 
         circuit = self.current_circuit
+
         if circuit.laps[0] + circuit.progression[0] > self.progression[0]:
-            reward += (circuit.laps[0] + circuit.progression[0] - self.progression[0])
+            reward += 5*(circuit.laps[0] +
+                         circuit.progression[0] - self.progression[0])
             self.progression[0] = circuit.laps[0] + circuit.progression[0]
-        reward += self.cars.speeds[0]/20
+        #reward += self.cars.speeds[0]/20
         return np.float(reward)
 
     @property
@@ -144,7 +152,7 @@ class Environment(gym.Env):
             self._reset_random_circuits()
 
         circuit = self.current_circuit
-        start = circuit.start.x , circuit.start.y
+        start = circuit.start.x, circuit.start.y
         self.cars.reset(start)
         circuit.reset()
 
@@ -172,7 +180,8 @@ class Environment(gym.Env):
     def _reset_random_circuits(self):
         self.random_circuits = [
             Circuit(
-                generate_circuit(n_points=20, difficulty=np.random.choice([0, 8, 16, 32])),
+                generate_circuit(
+                    n_points=20, difficulty=np.random.choice([0, 8, 16, 32])),
                 n_cars=self.n_cars, width=self.road_width
             )
             for _ in range(len(self.circuits))

@@ -1,3 +1,5 @@
+import gym
+from carl.car import Cars
 from carl.circuit import Circuit
 from carl.environment import Environment
 import learnrl as rl
@@ -62,7 +64,7 @@ class Evaluation():
         return self.eval(rewards, dones, next_observations, action_value)
 
 
-class QLearning(Evaluation):
+class QLearning(Evaluation):  # evaluation of Greedy policy
     def eval(self, rewards, dones, next_observations, action_value):
         future_rewards = rewards
 
@@ -85,41 +87,66 @@ class Control():
     def update_exploration(self):
         self.exploration *= (1-self.exploration_decay)
 
-    def act(self, Q):
+    def act(self, Q, observation):
         raise NotImplementedError(
             'You must redefine act(self, Q) when subclassing Control')
 
-    def __call__(self, Q, greedy=False):
+    def __call__(self, Q, observation, greedy=False):
         if greedy:
             actions = tf.argmax(Q, axis=-1)
         else:
-            actions = self.act(Q)
+            actions = self.act(Q, observation)
         return actions
 
 
-class Greedy(Control):
-    def act(self, Q):
+class Logic(Control):
+    def act(self, Q, observation):
         greedy_actions = tf.argmax(Q, axis=-1, output_type=tf.int32)
+
         batch_size = Q.shape[0]
+
+        # Warning : if any action_space modification then the turn_step slices below have to be changed too
         action_size = self.action_space.n
-        random_actions = tf.random.uniform(
-            (batch_size,), minval=0, maxval=action_size, dtype=tf.int32)
+
+        observations = tf.expand_dims(observation, axis=0)
+        turn = int(tf.argmax(observations[0, :-1]))
+        turn_step = 6
+        if turn <= -1 + 0.25*((observations[0, :-1]).shape[0]):
+            turn_step = 0
+        elif (turn > -1 + 0.25*((observations[0, :-1]).shape[0]))*(turn <= -1 + 0.5*((observations[0, :-1]).shape[0])):
+            turn_step = 3
+        elif (turn > 0.5*((observations[0, :-1]).shape[0]))*(turn <= 0.75*((observations[0, :-1]).shape[0])):
+            turn_step = 9
+        elif turn > 0.75*((observations[0, :-1]).shape[0]):
+            turn_step = 12
+
+        # speed_step = 1 + int(observations[0, turn] >= 2) - \
+         #   int(observations[0, turn] <= 2)
+        speed_step = 0
+        action = turn_step + speed_step
+        logic_actions = tf.expand_dims(action, axis=0)
 
         rd = tf.random.uniform((batch_size,), 0, 1)
         actions = tf.where(rd <= self.exploration,
-                           random_actions, greedy_actions)
+                           logic_actions, greedy_actions)
+
+        random_actions = tf.random.uniform(
+            (batch_size,), minval=0, maxval=action_size, dtype=tf.int32)
+
+        actions = tf.where(5*rd <= self.exploration,
+                           random_actions, actions)
 
         return actions
 
 
-class DQAgent(rl.Agent):
+class Off_policy_Agent(rl.Agent):
     def __init__(self, action_space, action_value: tf.keras.Model = None, control: Control = None, evaluation: Evaluation = None, memory: TFmemory = None, sample_size=32, learning_rate=1e-3, learning_rate_decay=1e-6):
         self.action_value = action_value
 
         self.action_value_opt = tf.keras.optimizers.Adam(
             learning_rate=learning_rate, decay=learning_rate_decay)
 
-        self.control = Greedy(action_space, 0) if control is None else control
+        self.control = Logic(action_space, 0) if control is None else control
         self.evaluation = evaluation
         self.memory = memory
         self.sample_size = sample_size
@@ -127,7 +154,7 @@ class DQAgent(rl.Agent):
     def act(self, observation, greedy=False):
         observations = tf.expand_dims(observation, axis=0)  # [1,*dim_obs]
         Q = self.action_value(observations)  # [1,n_actions]
-        actions = self.control(Q, greedy)
+        actions = self.control(Q, observation, greedy)
         return actions[0]
 
     def learn(self):
@@ -146,6 +173,7 @@ class DQAgent(rl.Agent):
 
             action_indices = tf.stack(
                 (tf.range(len(actions)), actions), axis=-1)
+
             Q_actions = tf.gather_nd(Q, action_indices)
 
             loss = tf.keras.losses.mean_squared_error(
@@ -193,7 +221,7 @@ class Validationcallback(rl.Callback):
 
 if __name__ == "__main__":
     circuit = Circuit([(0, 0), (0.5, 1), (1, 2), (2, 3),
-                       (3, 4), (6, 2), (6, 1), (4, 0)], n_cars=1, width=0.3)
+                       (3, 4), (4, 6), (7, 5), (10, 3), (7, 1), (4, 0)], n_cars=1, width=0.3)
     # /env = Environment(circuit)
 
     #control = Greedy(env.action_space, 0.1, 1e-3)
@@ -214,13 +242,14 @@ if __name__ == "__main__":
     #  memory=memory
    # )
     env2 = Environment(circuit, n_sensors=7)
-    control2 = Greedy(env2.action_space, 0.1, 1e-3)
+    # full use of the logic behavior at the beginning
+    control2 = Logic(env2.action_space, 1, 1e-3)
     action_value2 = tf.keras.models.Sequential((
         kl.Dense(64, activation='relu'),
         kl.Dense(64, activation='relu'),
         kl.Dense(env2.action_space.n, activation='linear'),
     ))
-    agent2 = DQAgent(
+    agent2 = Off_policy_Agent(
         env2.action_space,
         action_value=action_value2,
         control=control2,
@@ -233,6 +262,6 @@ if __name__ == "__main__":
     valid = Validationcallback()
 
     pg = rl.Playground(env2, agent2)
-    pg.fit(5000, verbose=1, episodes_cycle_len=100,
+    pg.fit(5000, verbose=1, episodes_cycle_len=10,
            callbacks=[checkpoint, valid])
     pg.test(1)

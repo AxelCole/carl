@@ -8,6 +8,7 @@ from carl.environment import Environment
 from carl.agents.tensorflow.DQN import DQNAgent
 from carl.agents.callbacks import ScoreCallback
 
+
 class MultiAgent(Agent):
 
     def __init__(self, agents):
@@ -22,6 +23,7 @@ class MultiAgent(Agent):
         else:
             return self.agents[0].act(observations, greedy)
 
+
 circuits = [
     [(0.5, 0), (2.5, 0), (3, 1), (3, 2), (2, 3), (1, 3), (0, 2), (0, 1)],
     [(0, 0), (1, 2), (0, 4), (3, 4), (2, 2), (3, 0)],
@@ -33,8 +35,8 @@ circuits = [
 ]
 
 teams = teams_from_csv(
-    models_path = os.path.join('models', 'DQN', 'challenge_dqn'),
-    csv_path = os.path.join('models', 'DQN', 'challenge_dqn', 'teams.csv')
+    models_path=os.path.join('models', 'DQN', 'challenge_dqn'),
+    csv_path=os.path.join('models', 'DQN', 'challenge_dqn', 'teams.csv')
 )
 
 modelnames, filepaths = [], []
@@ -46,7 +48,7 @@ for team in teams:
 
 n_agents = len(modelnames)
 env = Environment(circuits, n_agents, names=modelnames,
-    action_type='discrete', n_sensors=7, fov=np.pi*210/180)
+                  action_type='discrete', n_sensors=7, fov=np.pi*210/180)
 
 agents = [DQNAgent(env.action_space) for _ in range(n_agents)]
 for agent, filepath in zip(agents, filepaths):
